@@ -83,6 +83,17 @@ async def encrypt_database(sid, sname, db_path):
 @cli.command()
 @click.option("--sid", help='service id', default='')
 @click.option("--sname", help='service name', default='')
+async def delete_service(sid, sname):
+    if not sid and not sname:
+        click.echo(f'One of the two options --sid or --sname must be assigned')
+        return
+
+    await client_commands.delete_service(sid=sid, sname=sname)
+
+
+@cli.command()
+@click.option("--sid", help='service id', default='')
+@click.option("--sname", help='service name', default='')
 async def upload_encrypted_database(sid, sname):
     if not sid and not sname:
         click.echo(f'One of the two options --sid or --sname must be assigned')

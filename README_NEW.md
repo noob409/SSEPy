@@ -25,37 +25,37 @@ Use a second terminal to perform the following steps.
 ### 1. Generate Config File
 
 ```bash
-python3 run_client.py generate_config --scheme <scheme_name> --save-path <config.json>
+python3 run_client.py generate-config --scheme <scheme_name> --save-path <config.json>
 ```
 
 ### 2. Create a service
 
 ```bash
-python3 run_client.py create_service --config <config.json> --sname <service_name>
+python3 run_client.py create-service --config <config.json> --sname <service_name>
 ```
 
 ### 3. Upload configuration file
 
 ```bash
-python3 run_client.py upload_config --sname <service_name>
+python3 run_client.py upload-config --sname <service_name>
 ```
 
 ### 4. Create SSE Key
 
 ```bash
-python3 run_client.py generate_key --sname <service_name>
+python3 run_client.py generate-key --sname <service_name>
 ```
 
 ### 5. Generate Encrypted Database
 
 ```bash
-python3 run_client.py encrypt_database --sname <service_name> --db-path <db.json>
+python3 run_client.py encrypt-database --sname <service_name> --db-path <db.json>
 ```
 
 ### 6. Upload Encrypted Database
 
 ```bash
-python3 run_client.py upload_encrypted_database --sname <service_name>
+python3 run_client.py upload-encrypted-database --sname <service_name>
 ```
 
 ### 7. Encrypt Document Contents
@@ -69,25 +69,43 @@ Prepare a JSON file containing documents in the form:
 }
 ```
 
+The command also accepts document values as a list of strings, which are joined with newlines before encryption.
+
 Then run:
 
 ```bash
-python3 run_client.py encrypt_documents --sname <service_name> --doc-path <docs.json>
+python3 run_client.py encrypt-documents --sname <service_name> --doc-path <docs.json>
 ```
 
 ### 8. Upload Encrypted Document Ciphertexts to Server
 
 ```bash
-python3 run_client.py upload_ciphertexts --sname <service_name>
+python3 run_client.py upload-ciphertexts --sname <service_name>
 ```
 
 At this time, the server receives the ciphertext documents and prints the received ciphertext metadata.
 
-### 9. Keyword Search
+### 9. Delete a Service
+
+```bash
+python3 run_client.py delete_service --sname <service_name>
+```
+
+This will remove your local client service data and the service alias mapping. It also attempts to send a delete request to the server, but server-side cleanup is only available when the service has been uploaded and the connection is active.
+
+### 10. Keyword Search
 
 ```bash
 python3 run_client.py search --sname <service_name> --keyword <keyword>
 ```
+
+### 11. Service Delete
+
+```bash
+python3 run_client.py delete-service --sname <service_name>
+```
+
+This Function does not completed, because it would stuck. But it still can work.
 
 ## Push this version to GitHub and create a new branch
 

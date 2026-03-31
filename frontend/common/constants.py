@@ -25,5 +25,7 @@ class MsgType:
     # for search request
     TOKEN = "token"
     RESULT = "result"
+    # delete service
+    DELETE_SERVICE = "delete_service"
     # for debug
     CONTROL = "control"

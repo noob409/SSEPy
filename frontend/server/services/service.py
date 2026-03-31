@@ -89,7 +89,8 @@ class Service:
             MsgType.CONFIG: self.handle_upload_config,
             MsgType.UPLOAD_DB: self.handle_upload_encrypted_database,
             MsgType.DOCUMENTS: self.handle_upload_ciphertexts,
-            MsgType.TOKEN: self.handle_search_token
+            MsgType.TOKEN: self.handle_search_token,
+            MsgType.DELETE_SERVICE: self.handle_delete_service
         }
 
         if self.get_current_service_state() == SERVICE_STATE.ALL_READY:
@@ -114,13 +115,36 @@ class Service:
 
     async def _recv_message(self):
         async for message_bytes in self.websocket:
-            message_dict = pickle.loads(message_bytes)
+            try:
+                message_dict = pickle.loads(message_bytes)
+            except Exception as e:
+                logger.error(f"[{self.short_sid}] Failed to decode incoming message: {e}")
+                continue
+
+            if not isinstance(message_dict, dict):
+                logger.error(f"[{self.short_sid}] Incoming message is not a dict: {type(message_dict)}")
+                continue
+
             msg_type = message_dict.get("type")
             sid = message_dict.get("sid")
             if msg_type is None or sid is None or sid != self.sid:
                 continue
-            content_byte = message_dict.get("content")
-            self.recv_msg_handler[msg_type](content_byte, message_dict)
+
+            content_byte = message_dict.get("content", b"")
+            handler = self.recv_msg_handler.get(msg_type)
+            if handler is None:
+                logger.error(f"[{self.short_sid}] Unknown message type: {msg_type}")
+                self.send_message(MsgType.CONTROL, f"Unknown message type: {msg_type}".encode("utf8"))
+                continue
+
+            try:
+                handler(content_byte, message_dict)
+            except Exception as e:
+                logger.exception(f"[{self.short_sid}] Error handling message type {msg_type}: {e}")
+                try:
+                    self.send_message(MsgType.CONTROL, f"Handler error: {e}".encode("utf8"))
+                except Exception:
+                    pass
 
     def _load_sse_module(self):
         """load SSE module by service config.
@@ -240,6 +264,20 @@ class Service:
         FileManager.write_ciphertext_documents(self.sid, docs_bytes)
         self.send_message(MsgType.DOCUMENTS, pickle.dumps({"ok": True}))
         logger.info(f"Store ciphertext documents for service {self.short_sid} successfully.")
+
+    def handle_delete_service(self, content_bytes: bytes, raw_msg_dict: dict):
+        logger.info(f"Receive delete service request from service {self.short_sid}.")
+
+        if self.get_current_service_state() == SERVICE_STATE.NOT_EXISTS:
+            reason = f"The service {self.short_sid} does not exist on the server."
+            self.send_message(MsgType.CONTROL, reason.encode("utf8"))
+            logger.error(reason)
+            return
+
+        FileManager.delete_sid_folder(self.sid)
+        self.service_meta = {"state": SERVICE_STATE.NOT_EXISTS}
+        self.send_message(MsgType.CONTROL, f"Delete service {self.short_sid} successfully.".encode("utf8"))
+        logger.info(f"Delete service {self.short_sid} successfully.")
 
     def handle_search_token(self, token_bytes: bytes, raw_msg_dict: dict):
         logger.info(f"Receive search token from service {self.short_sid}.")

@@ -19,6 +19,7 @@ import json
 import pickle
 
 import schemes
+from frontend.client.services import file_manager as FileManager
 from frontend.client.services import service_name_handler
 from frontend.client.services.service import Service
 from toolkit.bytes_utils import BytesConverter
@@ -169,6 +170,52 @@ def encrypt_documents(doc_path: str,
             print(f">>> Encrypted documents successfully.")
     except Exception as e:
         print(f">>> Encrypt documents error: {e}")
+
+
+async def delete_service(*, sid: str = '', sname: str = ''):
+    global __client_service
+
+    if not sid and not sname:
+        print(f">>> One of the two options --sid or --sname must be assigned")
+        return
+
+    remote_deleted = False
+    try:
+        if not sid:
+            sid = service_name_handler.get_service_id_by_sname(sname)
+
+        __client_service = Service(sid)
+        try:
+            response = await __client_service.handle_delete_service(wait=True)
+            if response:
+                print(f">>> {response}")
+                remote_deleted = True
+        finally:
+            await __client_service.close_service()
+    except asyncio.TimeoutError:
+        print(f">>> Delete service request timed out, proceeding with local cleanup.")
+    except asyncio.CancelledError:
+        print(f">>> Delete service was cancelled, proceeding with local cleanup.")
+    except Exception as e:
+        print(f">>> Delete service error: {e}")
+    finally:
+        try:
+            if sname:
+                service_name_handler.remove_sname_id_pair(sname=sname)
+            else:
+                service_name_handler.remove_sname_id_pair(sid=sid)
+        except Exception:
+            pass
+
+        try:
+            FileManager.delete_sid_folder(sid)
+        except FileNotFoundError:
+            pass
+
+        if remote_deleted:
+            print(f">>> Delete service {sid} successfully (remote response received and local cleanup done).")
+        else:
+            print(f">>> Delete service {sid} local cleanup done.")
 
 
 async def upload_ciphertexts(*, sid: str = '', sname: str = ''):

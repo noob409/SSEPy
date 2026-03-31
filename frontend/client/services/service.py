@@ -286,33 +286,41 @@ class Service:
         await self.websocket.send(pickle.dumps(msg_dict))
 
     async def _recv_message(self):
-        async for message_bytes in self.websocket:
-            message_dict = pickle.loads(message_bytes)
-            msg_type = message_dict.get("type")
-            sid = message_dict.get("sid")
-            if msg_type is None or sid is None or sid != self.sid:
-                continue
-            content_byte = message_dict.get("content")
-            self.recv_msg_handler[msg_type](content_byte)
+        try:
+            async for message_bytes in self.websocket:
+                message_dict = pickle.loads(message_bytes)
+                msg_type = message_dict.get("type")
+                sid = message_dict.get("sid")
+                if msg_type is None or sid is None or sid != self.sid:
+                    continue
+                content_byte = message_dict.get("content")
+                self.recv_msg_handler[msg_type](content_byte)
 
-            # echo handler
-            if self.echo_handler.get(msg_type):
-                for handler in self.echo_handler.get(msg_type, []):
-                    handler(content_byte)
-                self.echo_handler[msg_type] = []  # clear
+                # echo handler
+                if self.echo_handler.get(msg_type):
+                    for handler in self.echo_handler.get(msg_type, []):
+                        handler(content_byte)
+                    self.echo_handler[msg_type] = []  # clear
 
-            # echo future handler
-            if self.echo_futures.get(msg_type):
-                for fut in self.echo_futures.get(msg_type, []):
-                    fut.set_result(content_byte)
-                self.echo_futures[msg_type] = []  # clear
+                # echo future handler
+                if self.echo_futures.get(msg_type):
+                    for fut in self.echo_futures.get(msg_type, []):
+                        if not fut.done():
+                            fut.set_result(content_byte)
+                    self.echo_futures[msg_type] = []  # clear
 
-            # result future handler
-            if msg_type == MsgType.RESULT:
-                token_digest = message_dict.get("token_digest")
-                for fut in self.result_futures.get(token_digest, []):
-                    fut.set_result(content_byte)
-                self.result_futures[token_digest] = []
+                # result future handler
+                if msg_type == MsgType.RESULT:
+                    token_digest = message_dict.get("token_digest")
+                    for fut in self.result_futures.get(token_digest, []):
+                        if not fut.done():
+                            fut.set_result(content_byte)
+                    self.result_futures[token_digest] = []
+        except (websockets.ConnectionClosedOK, websockets.ConnectionClosedError) as e:
+            logger.info(f"[{self.short_sid}] WebSocket connection closed: {e}")
+        except Exception as e:
+            logger.error(f"[{self.short_sid}] Unexpected error in recv loop: {e}")
+            raise
 
     def _load_sse_module(self):
         """load SSE module by service config.
@@ -463,8 +471,15 @@ class Service:
                 content_bytes = content.encode("utf8")
             elif isinstance(content, bytes):
                 content_bytes = content
+            elif isinstance(content, list):
+                if all(isinstance(item, str) for item in content):
+                    content_bytes = "\n".join(content).encode("utf8")
+                elif all(isinstance(item, bytes) for item in content):
+                    content_bytes = b"".join(content)
+                else:
+                    raise ValueError("Document list items must be all strings or all bytes.")
             else:
-                raise ValueError("Document content must be bytes or string.")
+                raise ValueError("Document content must be bytes, string, or list of bytes/strings.")
             document_ciphertexts[doc_id] = aes.Encrypt(self._derive_document_encryption_key(), content_bytes)
 
         FileManager.write_ciphertext_documents(self.sid, pickle.dumps(document_ciphertexts))
@@ -643,6 +658,31 @@ class Service:
 
         if wait:
             await asyncio.wait_for(fut, 60)
+
+    async def handle_delete_service(self, wait=False):
+        await self.load_websocket()
+
+        fut = None
+        if wait:
+            loop = asyncio.get_running_loop()
+            fut = loop.create_future()
+            self.register_upload_echo_future_once(MsgType.CONTROL, fut)
+
+        await self._send_message(MsgType.DELETE_SERVICE, b"")
+        logger.info(f"[{self.short_sid}] Sending delete service request.")
+
+        if wait:
+            try:
+                await asyncio.wait_for(fut, 10)
+                response = fut.result().decode("utf8", errors="ignore")
+                logger.info(f"[{self.short_sid}] Received delete service response: {response}")
+                return response
+            except asyncio.TimeoutError:
+                logger.warning(f"[{self.short_sid}] Delete service request timed out.")
+                return None
+            except asyncio.CancelledError:
+                logger.warning(f"[{self.short_sid}] Delete service request was cancelled.")
+                return None
 
     async def handle_keyword_search(self, keyword: bytes,
                                     wait=False,

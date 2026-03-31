@@ -68,3 +68,32 @@ def record_sname_id_pair(sname: str, sid: str):
         raise KeyError(f"The service name {sname} already exists.")
     mapping[sname] = sid
     write_service_mapping(mapping)
+
+
+def get_service_name_by_service_id(sid: str) -> str:
+    mapping = read_service_mapping()
+    for name, value in mapping.items():
+        if value == sid:
+            return name
+    raise KeyError(f"The service name corresponding to sid {sid} not found.")
+
+
+def remove_sname_id_pair(sname: str = None, sid: str = None):
+    if sname is None and sid is None:
+        raise ValueError("Either sname or sid must be provided.")
+
+    mapping = read_service_mapping()
+    if sname is not None:
+        if sname not in mapping:
+            raise KeyError(f"The service name {sname} not found.")
+        del mapping[sname]
+        write_service_mapping(mapping)
+        return
+
+    for name, value in list(mapping.items()):
+        if value == sid:
+            del mapping[name]
+            write_service_mapping(mapping)
+            return
+
+    raise KeyError(f"The service name corresponding to sid {sid} not found.")
