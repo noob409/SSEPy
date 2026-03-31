@@ -20,6 +20,8 @@ class MsgType:
     CONFIG = "config"
     # upload encrypted databases
     UPLOAD_DB = "upload_edb"
+    # upload encrypted documents
+    DOCUMENTS = "documents"
     # for search request
     TOKEN = "token"
     RESULT = "result"

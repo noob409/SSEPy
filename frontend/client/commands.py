@@ -74,6 +74,15 @@ def __upload_encrypted_database_echo_handler(fut: asyncio.Future):
     print(f">>> Upload encrypted database successfully.")
 
 
+def __upload_ciphertexts_echo_handler(fut: asyncio.Future):
+    content = pickle.loads(fut.result())
+    if not content.get("ok", False):
+        reason = content.get("reason", "")
+        print(f">>> Upload ciphertext documents error, reason: {reason}.")
+        return
+    print(f">>> Upload ciphertext documents successfully.")
+
+
 def __search_echo_handler(fut: asyncio.Future, output_format="raw"):
     global __client_service
 
@@ -140,7 +149,44 @@ def encrypt_database(db_path: str,
             __client_service.handle_encrypt_database(db)
             print(f">>> Encrypted Database successfully.")
     except Exception as e:
-        print(f">>> Create service error: {e}")
+        print(f">>> Encrypt database error: {e}")
+
+
+def encrypt_documents(doc_path: str,
+                      *,
+                      sid: str = '',
+                      sname: str = ''):
+    global __client_service
+
+    try:
+        if not sid:
+            sid = service_name_handler.get_service_id_by_sname(sname)
+
+        __client_service = Service(sid)
+        with open(doc_path, "r") as f:
+            documents = json.load(f)
+            __client_service.handle_encrypt_documents(documents)
+            print(f">>> Encrypted documents successfully.")
+    except Exception as e:
+        print(f">>> Encrypt documents error: {e}")
+
+
+async def upload_ciphertexts(*, sid: str = '', sname: str = ''):
+    global __client_service
+
+    try:
+        if not sid:
+            sid = service_name_handler.get_service_id_by_sname(sname)
+
+        __client_service = Service(sid)
+        try:
+            await __client_service.handle_upload_ciphertexts(
+                wait=True,
+                wait_callback_func=__upload_ciphertexts_echo_handler)
+        finally:
+            await __client_service.close_service()
+    except Exception as e:
+        print(f">>> Upload ciphertext documents error: {e}")
 
 
 async def upload_encrypted_database(*, sid: str = '', sname: str = ''):

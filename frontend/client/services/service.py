@@ -32,6 +32,7 @@ from frontend.common.utils import shorten_sid
 from frontend.constants import KEY_TYPE, KEY_SID, TYPE_INIT
 from global_config import ClientConfig
 from toolkit.logger.logger import getSSELogger
+from toolkit.symmetric_encryption.aes import AESxCBC
 
 logger = getSSELogger("sse_client",
                       console_log_level=ClientConfig.CONSOLE_LOG_LEVEL,
@@ -42,6 +43,8 @@ _BIT_CONFIG_UPLOADED = 0b00010
 _BIT_KEY_CREATED = 0b00100
 _BIT_DB_ENCRYPTED = 0b01000
 _BIT_DB_UPLOADED = 0b10000
+_BIT_DOCS_ENCRYPTED = 0b100000
+_BIT_DOCS_UPLOADED = 0b1000000
 
 _EMPTY_STATE = 0b00000
 
@@ -73,6 +76,14 @@ class ClientServiceState:
     @staticmethod
     def is_db_uploaded(state_bit_set):
         return bool(state_bit_set & _BIT_DB_UPLOADED)
+
+    @staticmethod
+    def is_docs_encrypted(state_bit_set):
+        return bool(state_bit_set & _BIT_DOCS_ENCRYPTED)
+
+    @staticmethod
+    def is_docs_uploaded(state_bit_set):
+        return bool(state_bit_set & _BIT_DOCS_UPLOADED)
 
     @staticmethod
     def set_config_created(state_bit_set, is_config_created: bool):
@@ -108,6 +119,20 @@ class ClientServiceState:
             return state_bit_set | _BIT_DB_UPLOADED
         else:
             return state_bit_set & ~_BIT_DB_UPLOADED
+
+    @staticmethod
+    def set_docs_encrypted(state_bit_set, is_docs_encrypted: bool):
+        if is_docs_encrypted:
+            return state_bit_set | _BIT_DOCS_ENCRYPTED
+        else:
+            return state_bit_set & ~_BIT_DOCS_ENCRYPTED
+
+    @staticmethod
+    def set_docs_uploaded(state_bit_set, is_docs_uploaded: bool):
+        if is_docs_uploaded:
+            return state_bit_set | _BIT_DOCS_UPLOADED
+        else:
+            return state_bit_set & ~_BIT_DOCS_UPLOADED
 
 
 def _check_config_valid(config: dict):
@@ -170,6 +195,7 @@ class Service:
         self.recv_msg_handler = {
             MsgType.CONFIG: self.handle_upload_config_echo,
             MsgType.UPLOAD_DB: self.handle_upload_encrypted_database_echo,
+            MsgType.DOCUMENTS: self.handle_upload_ciphertexts_echo,
             MsgType.RESULT: self.handle_result,
             MsgType.CONTROL: self.handle_control_message,
         }
@@ -404,6 +430,86 @@ class Service:
             logger.error(f"[{self.short_sid}] Upload encrypted database error, reason: {reason}")
             return
         logger.info(f"[{self.short_sid}] Upload encrypted database successfully")
+
+    def _default_upload_ciphertexts_echo_future_handler(self, fut: asyncio.Future):
+        content = fut.result()
+        if not content.get("ok", False):
+            reason = content.get("reason", "")
+            logger.error(f"[{self.short_sid}] Upload ciphertext documents error, reason: {reason}")
+            return
+        logger.info(f"[{self.short_sid}] Upload ciphertext documents successfully")
+
+    def _derive_document_encryption_key(self) -> bytes:
+        key_bytes = FileManager.read_key(self.sid)
+        return hashlib.sha256(key_bytes).digest()
+
+    def handle_encrypt_documents(self, documents: dict):
+        if not ClientServiceState.is_config_created(self.get_current_service_state()):
+            reason = f"The config of service {self.short_sid} is not found."
+            logger.error(reason)
+            raise ValueError(reason)
+        if not ClientServiceState.is_key_created(self.get_current_service_state()):
+            reason = f"The key of service {self.short_sid} is not found."
+            logger.error(reason)
+            raise ValueError(reason)
+        if not isinstance(documents, dict):
+            raise ValueError("Documents must be a dictionary mapping identifiers to plaintext content.")
+
+        self._load_sse_key()
+        aes = AESxCBC(key_length=32)
+        document_ciphertexts = {}
+        for doc_id, content in documents.items():
+            if isinstance(content, str):
+                content_bytes = content.encode("utf8")
+            elif isinstance(content, bytes):
+                content_bytes = content
+            else:
+                raise ValueError("Document content must be bytes or string.")
+            document_ciphertexts[doc_id] = aes.Encrypt(self._derive_document_encryption_key(), content_bytes)
+
+        FileManager.write_ciphertext_documents(self.sid, pickle.dumps(document_ciphertexts))
+        logger.info(f"[{self.short_sid}] Encrypt ciphertext documents successfully")
+
+    async def handle_upload_ciphertexts(self,
+                                       wait=False,
+                                       wait_callback_func=None):
+        await self.load_websocket()
+
+        if not ClientServiceState.is_config_uploaded(self.get_current_service_state()):
+            reason = f"The config of service {self.short_sid} has not been uploaded."
+            logger.error(reason)
+            raise ValueError(reason)
+
+        if not ClientServiceState.is_key_created(self.get_current_service_state()):
+            reason = f"The key of service {self.short_sid} is not found."
+            logger.error(reason)
+            raise ValueError(reason)
+
+        docs_bytes = FileManager.read_ciphertext_documents(self.sid)
+
+        fut = None
+        if wait:
+            if wait_callback_func is None:
+                wait_callback_func = self._default_upload_ciphertexts_echo_future_handler
+            loop = asyncio.get_running_loop()
+            fut = loop.create_future()
+            fut.add_done_callback(wait_callback_func)
+            self.register_upload_echo_future_once(MsgType.DOCUMENTS, fut)
+
+        await self._send_message(MsgType.DOCUMENTS, docs_bytes)
+        logger.info(f"[{self.short_sid}] Uploading ciphertext documents.")
+
+        if wait:
+            await asyncio.wait_for(fut, 60)
+
+    def handle_upload_ciphertexts_echo(self, content_bytes: bytes):
+        content = pickle.loads(content_bytes)
+        if not content.get("ok", False):
+            reason = content.get("reason", "")
+            logger.error(f"[{self.short_sid}] Upload ciphertext documents error, reason: {reason}")
+            return
+
+        logger.info(f"[{self.short_sid}] Upload ciphertext documents successfully")
 
     async def handle_upload_config(self,
                                    wait=False,

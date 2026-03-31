@@ -88,6 +88,7 @@ class Service:
         self.recv_msg_handler = {
             MsgType.CONFIG: self.handle_upload_config,
             MsgType.UPLOAD_DB: self.handle_upload_encrypted_database,
+            MsgType.DOCUMENTS: self.handle_upload_ciphertexts,
             MsgType.TOKEN: self.handle_search_token
         }
 
@@ -216,6 +217,29 @@ class Service:
         FileManager.write_service_meta(self.sid, self.service_meta)
         self.send_message(MsgType.UPLOAD_DB, pickle.dumps({"ok": True}))
         logger.info(f"Store encrypted database for service {self.short_sid} successfully.")
+
+    def handle_upload_ciphertexts(self, docs_bytes: bytes, raw_msg_dict: dict):
+        logger.info(f"Receive ciphertext documents from service {self.short_sid}.")
+
+        if self.get_current_service_state() == SERVICE_STATE.NOT_EXISTS:
+            reason = f"The config of service {self.short_sid} has not been uploaded."
+            self.send_message(MsgType.DOCUMENTS, pickle.dumps({"ok": False, "reason": reason}))
+            logger.error(reason)
+            raise ValueError(reason)
+
+        try:
+            ciphertext_documents = pickle.loads(docs_bytes)
+            print(f"Received ciphertext documents for service {self.short_sid}:")
+            for doc_id, ciphertext in ciphertext_documents.items():
+                print(f"- doc_id={doc_id}, ciphertext_len={len(ciphertext)}")
+                print(f"  ciphertext(hex)={ciphertext.hex()}")
+        except Exception as e:
+            logger.warning(f"Failed to decode ciphertext documents: {e}")
+            print(f"Received raw ciphertext blob ({len(docs_bytes)} bytes)")
+
+        FileManager.write_ciphertext_documents(self.sid, docs_bytes)
+        self.send_message(MsgType.DOCUMENTS, pickle.dumps({"ok": True}))
+        logger.info(f"Store ciphertext documents for service {self.short_sid} successfully.")
 
     def handle_search_token(self, token_bytes: bytes, raw_msg_dict: dict):
         logger.info(f"Receive search token from service {self.short_sid}.")

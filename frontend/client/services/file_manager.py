@@ -76,3 +76,18 @@ def write_key(sid: str, key_bytes: bytes):
 def read_key(sid: str) -> bytes:
     key_bytes = _PROGRAM_PATH.joinpath(sid).joinpath("key").read_bytes()
     return key_bytes
+
+
+def read_ciphertext_documents(sid: str) -> bytes:
+    docs_bytes = _PROGRAM_PATH.joinpath(sid).joinpath("ciphertext_documents").read_bytes()
+    return docs_bytes
+
+
+def write_ciphertext_documents(sid: str, docs_bytes: bytes):
+    with open(_PROGRAM_PATH.joinpath(sid).joinpath("ciphertext_documents"), "wb") as f:
+        f.write(docs_bytes)
+
+
+def delete_ciphertext_documents(sid: str):
+    ciphertext_path = _PROGRAM_PATH.joinpath(sid).joinpath("ciphertext_documents")
+    ciphertext_path.unlink(missing_ok=True)

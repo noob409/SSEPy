@@ -93,6 +93,30 @@ async def upload_encrypted_database(sid, sname):
 @cli.command()
 @click.option("--sid", help='service id', default='')
 @click.option("--sname", help='service name', default='')
+@click.option("--doc-path", help='document path')
+async def encrypt_documents(sid, sname, doc_path):
+    if doc_path is None:
+        click.echo(f'Incomplete options: --doc-path')
+        return
+    if not sid and not sname:
+        click.echo(f'One of the two options --sid or --sname must be assigned')
+        return
+    client_commands.encrypt_documents(doc_path, sid=sid, sname=sname)
+
+
+@cli.command()
+@click.option("--sid", help='service id', default='')
+@click.option("--sname", help='service name', default='')
+async def upload_ciphertexts(sid, sname):
+    if not sid and not sname:
+        click.echo(f'One of the two options --sid or --sname must be assigned')
+        return
+    await client_commands.upload_ciphertexts(sid=sid, sname=sname)
+
+
+@cli.command()
+@click.option("--sid", help='service id', default='')
+@click.option("--sname", help='service name', default='')
 @click.option("--keyword", help='keyword to search')
 @click.option("--output-format",
               help='Specify the output format, which currently supports '

@@ -71,3 +71,22 @@ def write_encrypted_database(sid: str, edb_bytes: bytes):
 
     with open(service_dir_path.joinpath("edb"), "wb") as f:
         f.write(edb_bytes)
+
+
+def read_ciphertext_documents(sid: str) -> bytes:
+    docs_bytes = _PROGRAM_PATH.joinpath(sid).joinpath("ciphertext_documents").read_bytes()
+    return docs_bytes
+
+
+def write_ciphertext_documents(sid: str, docs_bytes: bytes):
+    service_dir_path = _PROGRAM_PATH.joinpath(sid)
+    if not service_dir_path.exists():
+        return
+
+    with open(service_dir_path.joinpath("ciphertext_documents"), "wb") as f:
+        f.write(docs_bytes)
+
+
+def delete_ciphertext_documents(sid: str):
+    ciphertext_path = _PROGRAM_PATH.joinpath(sid).joinpath("ciphertext_documents")
+    ciphertext_path.unlink(missing_ok=True)
