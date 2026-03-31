@@ -22,25 +22,43 @@ python3 run_server.py start
 
 Use a second terminal to perform the following steps.
 
-### 1. Create a service
+### 1. Generate Config File
+
+```bash
+python3 run_client.py generate_config --scheme <scheme_name> --save-path <config.json>
+```
+
+### 2. Create a service
 
 ```bash
 python3 run_client.py create_service --config <config.json> --sname <service_name>
 ```
 
-### 2. Generate the SSE key
+### 3. Upload configuration file
+
+```bash
+python3 run_client.py upload_config --sname <service_name>
+```
+
+### 4. Create SSE Key
 
 ```bash
 python3 run_client.py generate_key --sname <service_name>
 ```
 
-### 3. Encrypt the inverted index database
+### 5. Generate Encrypted Database
 
 ```bash
 python3 run_client.py encrypt_database --sname <service_name> --db-path <db.json>
 ```
 
-### 4. Encrypt document contents
+### 6. Upload Encrypted Database
+
+```bash
+python3 run_client.py upload_encrypted_database --sname <service_name>
+```
+
+### 7. Encrypt Document Contents
 
 Prepare a JSON file containing documents in the form:
 
@@ -57,19 +75,7 @@ Then run:
 python3 run_client.py encrypt_documents --sname <service_name> --doc-path <docs.json>
 ```
 
-### 5. Upload config to server
-
-```bash
-python3 run_client.py upload_config --sname <service_name>
-```
-
-### 6. Upload encrypted index to server
-
-```bash
-python3 run_client.py upload_encrypted_database --sname <service_name>
-```
-
-### 7. Upload encrypted document ciphertexts to server
+### 8. Upload Encrypted Document Ciphertexts to Server
 
 ```bash
 python3 run_client.py upload_ciphertexts --sname <service_name>
@@ -77,7 +83,7 @@ python3 run_client.py upload_ciphertexts --sname <service_name>
 
 At this time, the server receives the ciphertext documents and prints the received ciphertext metadata.
 
-### 8. Search
+### 9. Keyword Search
 
 ```bash
 python3 run_client.py search --sname <service_name> --keyword <keyword>
@@ -94,7 +100,6 @@ git checkout -b feature/encrypted-documents
 # Add the new README and any other modified files
 git add README_NEW.md
 
-# If you also want to commit the code changes made in this session:
 git add frontend/client/commands.py frontend/client/services/service.py frontend/common/constants.py frontend/server/services/service.py frontend/client/services/file_manager.py run_client.py
 
 # Commit the changes
