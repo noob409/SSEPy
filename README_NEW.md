@@ -115,10 +115,8 @@ From your Codespace terminal, use:
 # Create a new branch for this work
 git checkout -b feature/encrypted-documents
 
-# Add the new README and any other modified files
-git add README_NEW.md
-
-git add frontend/client/commands.py frontend/client/services/service.py frontend/common/constants.py frontend/server/services/service.py frontend/client/services/file_manager.py run_client.py
+# Add any modified files
+git add .
 
 # Commit the changes
 git commit -m "Add encrypted document upload flow and README_NEW"
